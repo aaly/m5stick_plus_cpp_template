@@ -4,6 +4,82 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 
+//https://circuitdigest.com/microcontroller-projects/esp32-based-bluetooth-ibeacon
+
+#include "sys/time.h"
+#include "BLEDevice.h"
+#include "BLEUtils.h"
+#include "BLEServer.h"
+#include "BLEBeacon.h"
+#include "esp_sleep.h"
+
+#define GPIO_DEEP_SLEEP_DURATION     10  // sleep x seconds and then wake up
+RTC_DATA_ATTR static time_t last;        // remember last boot in RTC Memory
+RTC_DATA_ATTR static uint32_t bootcount; // remember number of boots in RTC Memory
+
+// See the following for generating UUIDs:
+// https://www.uuidgenerator.net/
+BLEAdvertising *pAdvertising;   // BLE Advertisement type
+struct timeval now;
+
+#define BEACON_UUID "87b99b2c-90fd-11e9-bc42-526af7764f64" // UUID 1 128-Bit (may use linux tool uuidgen or random numbers via https://www.uuidgenerator.net/)
+
+void setBeacon() {
+
+  BLEBeacon oBeacon = BLEBeacon();
+  oBeacon.setManufacturerId(0x4C00); // fake Apple 0x004C LSB (ENDIAN_CHANGE_U16!)
+  oBeacon.setProximityUUID(BLEUUID(BEACON_UUID));
+  oBeacon.setMajor((bootcount & 0xFFFF0000) >> 16);
+  oBeacon.setMinor(bootcount & 0xFFFF);
+  oBeacon.setMinor(bootcount & 0xFFFF);
+  BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
+  BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
+
+  oAdvertisementData.setFlags(0x04); // BR_EDR_NOT_SUPPORTED 0x04
+
+  std::string strServiceData = "";
+
+  strServiceData += (char)26;     // Len
+  strServiceData += (char)0xFF;   // Type
+  strServiceData += oBeacon.getData();
+  oAdvertisementData.addData(strServiceData);
+
+  pAdvertising->setAdvertisementData(oAdvertisementData);
+  //pAdvertising->setScanResponseData(oScanResponseData);
+}
+
+void setup() {
+
+  Serial.begin(115200);
+  gettimeofday(&now, NULL);
+  Serial.printf("start ESP32 %d\n", bootcount++);
+  Serial.printf("deep sleep (%lds since last reset, %lds since last boot)\n", now.tv_sec, now.tv_sec - last);
+  last = now.tv_sec;
+
+  // Create the BLE Device
+  BLEDevice::init("ESP32 as iBeacon");
+  BLEDevice::setPower(ESP_PWR_LVL_P9);
+  // Create the BLE Server
+  pAdvertising = BLEDevice::getAdvertising();
+  BLEDevice::startAdvertising();
+  setBeacon();
+  // Start advertising
+  pAdvertising->start();
+  Serial.println("Advertizing started...");
+  
+}
+
+void loop() {
+
+  delay(100);
+  
+  //Serial.printf("enter deep sleep\n");
+  //esp_deep_sleep(1000000LL * GPIO_DEEP_SLEEP_DURATION);
+  //esp_deep_sleep(100000LL * GPIO_DEEP_SLEEP_DURATION);
+  //Serial.printf("in deep sleep\n");
+}
+
+/*
 class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
   public:
     // Callback when BLE is detected
@@ -17,13 +93,14 @@ class IBeaconAdvertised: public BLEAdvertisedDeviceCallbacks {
   private:
     // iBeacon packet judgment
     bool isIBeacon(BLEAdvertisedDevice device) {
+        return true;
       if (device.getManufacturerData().length() < 25) {
         return false;
       }
-      if (getCompanyId(device) != 0x004C) {
+      if (getCompanyId(device) != 0x1234) {
         return false;
       }
-      if (getIBeaconHeader(device) != 0x1502) {
+      if (getIBeaconHeader(device) != 0x1234) {
         return false;
       }
       return true;
@@ -90,10 +167,11 @@ void loop() {
   BLEScan* scan = BLEDevice::getScan();
   scan->setAdvertisedDeviceCallbacks(new IBeaconAdvertised(), true);
   scan->setActiveScan(true);
-  scan->start(60);
+  scan->start(3);
   Serial.println("complete.");
   M5.Lcd.print("complete.");
-}
+}*/
+
 extern "C" void app_main()
 {
     initArduino();
@@ -104,4 +182,6 @@ extern "C" void app_main()
     while(true) {
         loop();
     }
+
+    pAdvertising->stop();
 }
