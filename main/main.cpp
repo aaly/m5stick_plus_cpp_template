@@ -13,7 +13,14 @@
 #include "BLEBeacon.h"
 #include "esp_sleep.h"
 
-#define GPIO_DEEP_SLEEP_DURATION     10  // sleep x seconds and then wake up
+
+#include "driver/uart.h"
+
+
+#define uS_PER_SEC 1000000LL
+#define GPIO_DEEP_SLEEP_DURATION_SECOND  uS_PER_SEC // sleep x seconds and then wake up
+#define GPIO_DEEP_SLEEP_DURATION_MILLISECOND uS_PER_SEC/1000 // sleep x milliseconds and then wake up
+
 RTC_DATA_ATTR static time_t last;        // remember last boot in RTC Memory
 RTC_DATA_ATTR static uint32_t bootcount; // remember number of boots in RTC Memory
 
@@ -26,57 +33,100 @@ struct timeval now;
 
 void setBeacon() {
 
-  BLEBeacon oBeacon = BLEBeacon();
-  oBeacon.setManufacturerId(0x4C00); // fake Apple 0x004C LSB (ENDIAN_CHANGE_U16!)
-  oBeacon.setProximityUUID(BLEUUID(BEACON_UUID));
-  oBeacon.setMajor((bootcount & 0xFFFF0000) >> 16);
-  oBeacon.setMinor(bootcount & 0xFFFF);
-  oBeacon.setMinor(bootcount & 0xFFFF);
-  BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
-  BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
+    BLEBeacon oBeacon = BLEBeacon();
+    oBeacon.setManufacturerId(0x4C00); // fake Apple 0x004C LSB (ENDIAN_CHANGE_U16!)
+    oBeacon.setProximityUUID(BLEUUID(BEACON_UUID));
+    oBeacon.setMajor((bootcount & 0xFFFF0000) >> 16);
+    oBeacon.setMinor(bootcount & 0xFFFF);
+    oBeacon.setMinor(bootcount & 0xFFFF);
+    BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
+    BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
 
-  oAdvertisementData.setFlags(0x04); // BR_EDR_NOT_SUPPORTED 0x04
+    oAdvertisementData.setFlags(0x04); // BR_EDR_NOT_SUPPORTED 0x04
 
-  std::string strServiceData = "";
+    std::string strServiceData = "";
 
-  strServiceData += (char)26;     // Len
-  strServiceData += (char)0xFF;   // Type
-  strServiceData += oBeacon.getData();
-  oAdvertisementData.addData(strServiceData);
+    strServiceData += (char)26;     // Len
+    strServiceData += (char)0xFF;   // Type
+    strServiceData += oBeacon.getData();
+    oAdvertisementData.addData(strServiceData);
 
-  pAdvertising->setAdvertisementData(oAdvertisementData);
-  //pAdvertising->setScanResponseData(oScanResponseData);
+    pAdvertising->setAdvertisementData(oAdvertisementData);
+    //pAdvertising->setScanResponseData(oScanResponseData);
 }
 
 void setup() {
 
-  Serial.begin(115200);
-  gettimeofday(&now, NULL);
-  Serial.printf("start ESP32 %d\n", bootcount++);
-  Serial.printf("deep sleep (%lds since last reset, %lds since last boot)\n", now.tv_sec, now.tv_sec - last);
-  last = now.tv_sec;
+    Serial.begin(115200);
+    gettimeofday(&now, NULL);
+    Serial.printf("start ESP32 %d\n", bootcount++);
+    Serial.printf("deep sleep (%lds since last reset, %lds since last boot)\n", now.tv_sec, now.tv_sec - last);
+    last = now.tv_sec;
 
-  // Create the BLE Device
-  BLEDevice::init("ESP32 as iBeacon");
-  BLEDevice::setPower(ESP_PWR_LVL_P9);
-  // Create the BLE Server
-  pAdvertising = BLEDevice::getAdvertising();
-  BLEDevice::startAdvertising();
-  setBeacon();
-  // Start advertising
-  pAdvertising->start();
-  Serial.println("Advertizing started...");
+    // Create the BLE Device
+    BLEDevice::init("ESP32 as iBeacon");
+    //BLEDevice::setPower(ESP_PWR_LVL_P9);
+    BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_ADV);
+    // Create the BLE Server
+    pAdvertising = BLEDevice::getAdvertising();
+    BLEDevice::startAdvertising();
+
+    pAdvertising->setMinInterval(0x20);
+    pAdvertising->setMaxInterval(0x30);
+    setBeacon();
+    // Start advertising
+    pAdvertising->start();
+    Serial.println("Advertizing started...");
   
 }
 
 void loop() {
 
-  delay(100);
-  
-  //Serial.printf("enter deep sleep\n");
-  //esp_deep_sleep(1000000LL * GPIO_DEEP_SLEEP_DURATION);
-  //esp_deep_sleep(100000LL * GPIO_DEEP_SLEEP_DURATION);
-  //Serial.printf("in deep sleep\n");
+    delay(200);
+    return;
+
+
+
+    
+    esp_sleep_enable_timer_wakeup(GPIO_DEEP_SLEEP_DURATION_MILLISECOND * 10);
+    Serial.printf("enter light sleep\n");
+
+    /* To make sure the complete line is printed before entering sleep mode,
+    * need to wait until UART TX FIFO is empty:
+    */
+    uart_wait_tx_idle_polling(GPIO_DEEP_SLEEP_DURATION_MILLISECOND * 10);
+
+    
+    
+    /* Get timestamp before entering sleep */
+    int64_t t_before_us = esp_timer_get_time();
+    esp_light_sleep_start();
+    
+    
+    /* Get timestamp after waking up from sleep */
+    int64_t t_after_us = esp_timer_get_time();
+
+    /* Determine wake up reason */
+    const char* wakeup_reason;
+    switch (esp_sleep_get_wakeup_cause()) {
+        case ESP_SLEEP_WAKEUP_TIMER:
+            wakeup_reason = "timer";
+            break;
+        case ESP_SLEEP_WAKEUP_GPIO:
+            wakeup_reason = "pin";
+            break;
+        default:
+            wakeup_reason = "other";
+            break;
+    }
+
+    printf("Returned from light sleep, reason: %s, t=%lld ms, slept for %lld ms\n",
+            wakeup_reason, t_after_us / 1000, (t_after_us - t_before_us) / 1000);
+            
+    //Serial.printf("enter deep sleep\n");
+    //esp_deep_sleep();
+    //esp_deep_sleep(1000000LL * GPIO_DEEP_SLEEP_DURATION);
+    //Serial.printf("in deep sleep\n");
 }
 
 /*
