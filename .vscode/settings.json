@@ -10,6 +10,11 @@
     "initializer_list": "cpp",
     "*.tcc": "cpp",
     "system_error": "cpp",
-    "*.ipp": "cpp"
-  }
+    "*.ipp": "cpp",
+    "list": "cpp",
+    "unordered_set": "cpp",
+    "regex": "cpp"
+  },
+  "idf.adapterTargetName": "esp32",
+  "idf.portWin": "COM12"
 }
