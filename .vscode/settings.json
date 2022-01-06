@@ -64,7 +64,9 @@
     "sstream": "cpp",
     "stdexcept": "cpp",
     "streambuf": "cpp",
-    "thread": "cpp"
+    "thread": "cpp",
+    "forward_list": "cpp",
+    "valarray": "cpp"
   },
   "idf.adapterTargetName": "esp32",
   "idf.portWin": "COM12"

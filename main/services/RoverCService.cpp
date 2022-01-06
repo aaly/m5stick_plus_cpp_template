@@ -3,20 +3,51 @@
 
 namespace Services {
 
-  Result<std::string> RoverCService::Init() {    //sda  0     scl  26
+  Result<std::string> RoverCService::Init() {
       Result<std::string> result;
-      //Wire.begin(static_cast<int>(0), static_cast<int>(26), static_cast<uint32_t>(100));
-      Wire.begin(0, 26, 100);
+      Serial.printf("RoverCService::Init()\n");
+      constexpr int sda = 0;
+      constexpr int scl = 26;
+      constexpr int frequency = 100;
+      Wire.begin(static_cast<int>(sda), static_cast<int>(scl), static_cast<uint32_t>(frequency));
 
-      AddCallback(std::string("forward"), [&](const std::string& data) { 
-        Move_stop(100);
-        return Move_forward(10); });
+      AddCallback(std::string("forward"), [&](const ParametersPack& data) { 
+        return Move_forward(data.GetParameter<int8_t>("speed"));
+        });
+
+      AddCallback(std::string("back"), [&](const ParametersPack& data) { 
+        return Move_back(data.GetParameter<int8_t>("speed"));
+        });
+
+      AddCallback(std::string("right"), [&](const ParametersPack& data) { 
+        return Move_right(data.GetParameter<int8_t>("speed"));
+        });
+
+      AddCallback(std::string("left"), [&](const ParametersPack& data) { 
+        return Move_left(data.GetParameter<int8_t>("speed"));
+        });
+
+      AddCallback(std::string("turn_left"), [&](const ParametersPack& data) { 
+        return Move_turnleft(data.GetParameter<int8_t>("speed"));
+        });
+
+      AddCallback(std::string("turn_right"), [&](const ParametersPack& data) { 
+        return Move_turnright(data.GetParameter<int8_t>("speed"));
+        });
+
+      AddCallback(std::string("servo_angle"), [&](const ParametersPack& data) { 
+        return Servo_angle(data.GetParameter<int8_t>("servo_ch"), data.GetParameter<int8_t>("degree"));
+        });
+
+        AddCallback(std::string("stop"), [&](const ParametersPack& data) { 
+        return Move_stop();
+        });
 
       result.SetStatus(StatusType::SUCCESS);
       return result;
   }
 
-  Result<std::string> RoverCService::Send_iic(uint8_t Register, uint8_t Speed) {
+  Result<std::string> RoverCService::Send_iic(const uint8_t Register, const uint8_t Speed) {
     Result<std::string> result;
     Wire.beginTransmission(ROVER_ADDRESS);
     Wire.write(Register);
@@ -25,7 +56,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Move_forward(int8_t Speed) {
+  Result<std::string> RoverCService::Move_forward(const int8_t Speed) {
     Result<std::string> result;
     Send_iic(0x00, Speed );
     Send_iic(0x01, Speed );
@@ -34,7 +65,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Move_back(int8_t Speed) {
+  Result<std::string> RoverCService::Move_back(const int8_t Speed) {
     Result<std::string> result;
     Send_iic(0x00, (-1) * Speed );
     Send_iic(0x01, (-1) * Speed );
@@ -43,7 +74,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Move_turnleft(int8_t Speed) {
+  Result<std::string> RoverCService::Move_turnleft(const int8_t Speed) {
     Result<std::string> result;
     Send_iic(0x00, Speed );
     Send_iic(0x01, (-1) * Speed );
@@ -52,7 +83,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Move_turnright(int8_t Speed) {
+  Result<std::string> RoverCService::Move_turnright(const int8_t Speed) {
     Result<std::string> result;
     Send_iic(0x00, (-1) * Speed );
     Send_iic(0x01, Speed );
@@ -61,7 +92,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Move_left(int8_t Speed) {
+  Result<std::string> RoverCService::Move_left(const int8_t Speed) {
     Result<std::string> result;
     Send_iic(0x00, (-1) * Speed );
     Send_iic(0x01, Speed );
@@ -70,7 +101,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Move_right(int8_t Speed) {
+  Result<std::string> RoverCService::Move_right(const int8_t Speed) {
     Result<std::string> result;
     Send_iic(0x00, Speed );
     Send_iic(0x01, (-1) * Speed );
@@ -79,7 +110,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Move_stop(int8_t Speed) {
+  Result<std::string> RoverCService::Move_stop() {
     Result<std::string> result;
     Send_iic(0x00, 0 );
     Send_iic(0x01, 0 );
@@ -88,7 +119,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Servo_angle(uint8_t Servo_ch, uint8_t degree) {
+  Result<std::string> RoverCService::Servo_angle(const uint8_t Servo_ch, uint8_t degree) {
     Result<std::string> result;
     degree = min(90, int(degree));
     degree = max(0, int(degree));
@@ -96,7 +127,7 @@ namespace Services {
     return result;
   }
 
-  Result<std::string> RoverCService::Servo_pulse(uint8_t Servo_ch, uint16_t width) {
+  Result<std::string> RoverCService::Servo_pulse(const uint8_t Servo_ch, uint16_t width) {
     Result<std::string> result;
     width = min(2500, int(width));
     width = max(500, int(width));

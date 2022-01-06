@@ -15,7 +15,7 @@ namespace Services {
             Result<std::string> Move_turnright(int8_t Speed);
             Result<std::string> Move_left(int8_t Speed);
             Result<std::string> Move_right(int8_t Speed);
-            Result<std::string> Move_stop(int8_t Speed);
+            Result<std::string> Move_stop();
             Result<std::string> Send_iic(uint8_t Register, uint8_t Speed);
             Result<std::string> Servo_angle(uint8_t Servo_ch, uint8_t degree);
             Result<std::string> Servo_pulse(uint8_t Servo_ch, uint16_t width);
